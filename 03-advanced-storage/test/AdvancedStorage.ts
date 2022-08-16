@@ -24,7 +24,7 @@ describe("AdvancedStorage", function () {
       const { advancedStorage } = await loadFixture(deployWithCleanFixture);
 
       const tx = await advancedStorage.add(10);
-      tx.wait();
+      await tx.wait();
 
       expect(await advancedStorage.get(0)).to.equal(10);
     });
@@ -33,10 +33,10 @@ describe("AdvancedStorage", function () {
       const { advancedStorage } = await loadFixture(deployWithCleanFixture);
 
       const tx1 = await advancedStorage.add(10);
-      tx1.wait();
+      await tx1.wait();
 
       const tx2 = await advancedStorage.add(20);
-      tx2.wait();
+      await tx2.wait();
 
       expect(await advancedStorage.get(1)).to.equal(20);
     });
@@ -45,10 +45,10 @@ describe("AdvancedStorage", function () {
       const { advancedStorage } = await loadFixture(deployWithCleanFixture);
 
       const tx1 = await advancedStorage.add(10);
-      tx1.wait();
+      await tx1.wait();
 
       const tx2 = await advancedStorage.add(20);
-      tx2.wait();
+      await tx2.wait();
 
       expect(await advancedStorage.getAll()).to.deep.equal([10, 20]);
     });
@@ -57,10 +57,10 @@ describe("AdvancedStorage", function () {
       const { advancedStorage } = await loadFixture(deployWithCleanFixture);
 
       const tx1 = await advancedStorage.add(10);
-      tx1.wait();
+      await tx1.wait();
 
       const tx2 = await advancedStorage.add(20);
-      tx2.wait();
+      await tx2.wait();
 
       expect(await advancedStorage.length()).to.equal(2);
     });

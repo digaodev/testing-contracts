@@ -15,7 +15,7 @@ describe("SimpleCrud", function () {
       const { simpleCrud } = await loadFixture(deployWithCleanFixture);
 
       const tx = await simpleCrud.create("Bob");
-      tx.wait();
+      await tx.wait();
 
       const [createdUserId, createdUserName] = await simpleCrud.read(1);
 
@@ -27,10 +27,10 @@ describe("SimpleCrud", function () {
       const { simpleCrud } = await loadFixture(deployWithCleanFixture);
 
       const tx = await simpleCrud.create("Bob");
-      tx.wait();
+      await tx.wait();
 
       const tx2 = await simpleCrud.create("Alice");
-      tx2.wait();
+      await tx2.wait();
 
       const [createdUserId, createdUserName] = await simpleCrud.read(2);
 
@@ -49,10 +49,10 @@ describe("SimpleCrud", function () {
       const { simpleCrud } = await loadFixture(deployWithCleanFixture);
 
       const tx = await simpleCrud.create("Bob");
-      tx.wait();
+      await tx.wait();
 
       const tx2 = await simpleCrud.update(1, "Bob Doe");
-      tx2.wait();
+      await tx2.wait();
 
       const [, updatedUserName] = await simpleCrud.read(1);
 
@@ -70,10 +70,10 @@ describe("SimpleCrud", function () {
       const { simpleCrud } = await loadFixture(deployWithCleanFixture);
 
       const tx = await simpleCrud.create("Bob");
-      tx.wait();
+      await tx.wait();
 
       const tx2 = await simpleCrud.destroy(1);
-      tx2.wait();
+      await tx2.wait();
 
       await expect(simpleCrud.destroy(1)).to.be.revertedWith("User not found");
     });

@@ -24,7 +24,7 @@ describe("SimpleStorage", function () {
       const textToStore = 'John Doe'
 
       const tx = await simpleStorage.store(textToStore)
-      tx.wait()
+      await tx.wait()
 
       expect(await simpleStorage.retrieve()).to.equal(textToStore);
     });

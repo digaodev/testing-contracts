@@ -112,7 +112,7 @@ describe("Wallet", function () {
       const tx = await walletContract.connect(approver1)
         .createTransfer(transferValue, receiver.address);
 
-      tx.wait();
+      await tx.wait();
 
       const transfer = await walletContract.transfers(transferId);
       expect(transfer.id).to.equal(transferId);
@@ -157,7 +157,7 @@ describe("Wallet", function () {
       const transferId = 0
 
       const tx1 = await walletContract.connect(approver1).approveTransfer(transferId);
-      tx1.wait();
+      await tx1.wait();
 
       await expect(
         walletContract.connect(approver2).approveTransfer(transferId)
@@ -187,10 +187,10 @@ describe("Wallet", function () {
       const transferId = 0
 
       const tx1 = await walletContract.connect(approver1).approveTransfer(transferId);
-      tx1.wait();
+      await tx1.wait();
 
       const tx2 = await walletContract.connect(approver2).approveTransfer(transferId);
-      tx2.wait();
+      await tx2.wait();
 
       await expect(walletContract.connect(approver3).approveTransfer(transferId))
         .to.be.revertedWith('transfer has already been sent');
