@@ -1,8 +1,9 @@
 import { ethers } from "hardhat";
 
 async function main() {
+  const [owner] = await ethers.getSigners();
   const EtherWallet = await ethers.getContractFactory("EtherWallet");
-  const etherWallet = await EtherWallet.deploy();
+  const etherWallet = await EtherWallet.deploy(owner.address);
 
   await etherWallet.deployed();
 
