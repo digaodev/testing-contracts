@@ -1,18 +1,12 @@
 import { ethers } from "hardhat";
 
 async function main() {
-  const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-  const unlockTime = currentTimestampInSeconds + ONE_YEAR_IN_SECS;
+  const Auctions = await ethers.getContractFactory("Auctions");
+  const auctions = await Auctions.deploy();
 
-  const lockedAmount = ethers.utils.parseEther("1");
+  await auctions.deployed();
 
-  const Auction = await ethers.getContractFactory("Auction");
-  const auction = await Auction.deploy(unlockTime, { value: lockedAmount });
-
-  await auction.deployed();
-
-  console.log(`Auction contract deployed to ${auction.address}`);
+  console.log(`Auctions contract deployed to ${auctions.address}`);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
