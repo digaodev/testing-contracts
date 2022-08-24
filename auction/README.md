@@ -1,6 +1,6 @@
-# Simple Crud Contract Hardhat Project
+# Auction Contract Hardhat Project
 
-This project demonstrates a `Hardhat` Simple Crud contract written in `Solidity`. It has the contract, a test for this contract, and a script that deploys this contract.
+This project demonstrates a `Hardhat` Auction contract written in `Solidity`. It has the contract, a test for this contract, and a script that deploys this contract.
 
 ## How to use
 
@@ -24,7 +24,7 @@ npx hardhat compile
 npx hardhat test
 ```
 
-
+<img width="915" alt="image" src="https://user-images.githubusercontent.com/14263913/186523786-97a1911e-297d-4eb8-81df-1139ccbe6eec.png">
 
 #
 
