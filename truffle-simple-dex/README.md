@@ -26,3 +26,4 @@ truffle develop // (keep it running)
 truffle test  // (in another terminal)
 ```
 
+<img width="716" alt="image" src="https://user-images.githubusercontent.com/14263913/187726502-d140d59f-40f6-4744-9321-c50ff2bc00fb.png">
