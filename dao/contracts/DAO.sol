@@ -27,11 +27,11 @@ contract DAO {
 
     uint public totalShares;
     uint public availableFunds;
-    uint public contributionEnd;
     uint public nextProposalId = 1;
-    uint public voteTime;
-    uint public quorum;
-    address public admin;
+    uint public immutable contributionEnd;
+    uint public immutable voteTime;
+    uint public immutable quorum;
+    address public immutable admin;
 
     constructor(
         uint contributionTime,
@@ -57,7 +57,6 @@ contract DAO {
             investors[msg.sender] == true,
             "Only investors can perform this activity"
         );
-
         _;
     }
 
@@ -66,7 +65,6 @@ contract DAO {
      */
     modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin can perform this activity");
-
         _;
     }
 
@@ -130,7 +128,7 @@ contract DAO {
      * @param recipient Recipient that will receive the funds
      */
     function createProposal(
-        string memory name,
+        string calldata name,
         uint amount,
         address payable recipient
     ) external onlyInvestors {
@@ -191,7 +189,7 @@ contract DAO {
      * @param proposalId number value for the proposal's identifier
      */
     function executeProposal(uint proposalId) external onlyAdmin {
-        Proposal storage proposal = proposals[proposalId];
+        Proposal memory proposal = proposals[proposalId];
 
         require(block.timestamp < proposal.end, "Execution period has ended");
         require(proposal.executed == false, "Proposal already executed");
