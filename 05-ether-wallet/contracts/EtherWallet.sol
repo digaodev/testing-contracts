@@ -6,7 +6,7 @@ pragma solidity ^0.8.9;
  * @dev Crypto wallet capable of storing and sending Ether
  */
 contract EtherWallet {
-    address public owner;
+    address public immutable owner;
 
     /**
      * @dev Event for when ether is sent from this wallet to another address
