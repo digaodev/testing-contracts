@@ -21,7 +21,7 @@ contract SimpleCrud {
      * @dev Add a new user
      * @param _name string value to add as a new user
      */
-    function create(string memory _name) public {
+    function create(string calldata _name) public {
         users.push(User(_nextId, _name));
         _nextId++;
     }
@@ -41,7 +41,7 @@ contract SimpleCrud {
      * @param _id user Id value to search on the array
      * @param _name user name value to update
      */
-    function update(uint _id, string memory _name) public {
+    function update(uint _id, string calldata _name) public {
         uint index = _findById(_id);
         users[index].name = _name;
     }
@@ -61,7 +61,9 @@ contract SimpleCrud {
      * @return the index position of the user on the array
      */
     function _findById(uint _id) internal view returns (uint) {
-        for (uint i = 0; i < users.length; i++) {
+        uint usersLength = users.length;
+        
+        for (uint i = 0; i < usersLength; i++) {
             if (users[i].id == _id) {
                 return i;
             }
