@@ -49,6 +49,7 @@ contract Wallet {
             transfers[id].sent = true;
             address payable to = transfers[id].to;
             uint amount = transfers[id].amount;
+            
             to.transfer(amount);
         }
     }
@@ -57,7 +58,9 @@ contract Wallet {
 
     modifier onlyApprover() {
         bool allowed = false;
-        for (uint i; i < approvers.length; i++) {
+        uint approversLength = approvers.length;
+
+        for (uint i; i < approversLength; i++) {
             if (approvers[i] == msg.sender) {
                 allowed = true;
                 break;
