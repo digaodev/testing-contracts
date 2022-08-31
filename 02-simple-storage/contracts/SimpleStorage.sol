@@ -12,7 +12,7 @@ contract SimpleStorage {
      * @dev Store a string value in a storage variable
      * @param _data value to store
      */
-    function store(string memory _data) public {
+    function store(string calldata _data) public {
         data = _data;
     }
 
