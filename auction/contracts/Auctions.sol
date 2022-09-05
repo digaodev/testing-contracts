@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-// Import this file to use console.log
-import "hardhat/console.sol";
-
 /**
  * @title Auction
  * @dev Allow auctions to be created and receive offers;
@@ -14,52 +11,59 @@ import "hardhat/console.sol";
  */
 contract Auctions {
     struct Auction {
-        uint id;
-        uint auctionEnd;
-        uint bestOfferId;
-        uint minimumOfferPrice;
-        uint[] offerIds;
+        uint256 id;
+        uint256 auctionEnd;
+        uint256 bestOfferId;
+        uint256 minimumOfferPrice;
+        uint256[] offerIds;
         string name;
         string description;
         address seller;
         bool isCanceled;
     }
     struct Offer {
-        uint id;
-        uint auctionId;
-        uint offerPrice;
+        uint256 id;
+        uint256 auctionId;
+        uint256 offerPrice;
         address buyer;
+        bool isStale; // is true when superseded by a higher bid from same buyer
     }
 
-    uint private nextAuctionId = 1;
-    uint private nextOfferId = 1;
+    uint256 private nextAuctionId = 1;
+    uint256 private nextOfferId = 1;
 
-    mapping(uint => Auction) public auctions;
-    mapping(uint => Offer) public offers;
-    mapping(address => uint[]) public sellerAuctions;
-    mapping(address => uint[]) public buyerOffers;
+    mapping(uint256 => Auction) public auctions;
+    mapping(uint256 => Offer) public offers;
+    mapping(address => uint256[]) public sellerAuctions;
+    mapping(address => uint256[]) public buyerOffers;
 
     event CreateAuction(
-        uint indexed auctionId,
+        uint256 indexed auctionId,
         string indexed auctionName,
         address indexed seller
     );
-    event CancelAuction(uint indexed auctionId, address indexed seller);
+    event CancelAuction(uint256 indexed auctionId, address indexed seller);
     event CreateOffer(
-        uint indexed offerId,
-        uint indexed auctionId,
-        uint bidAmount,
-        uint totalBidAmount,
+        uint256 indexed offerId,
+        uint256 indexed auctionId,
+        uint256 bidAmount,
+        uint256 totalBidAmount,
         address indexed buyer
     );
-    event Trade(uint indexed auctionId, uint indexed bestOfferId);
-    event Transfer(address indexed recipient, uint amount);
+    event Trade(uint256 indexed auctionId, uint256 indexed bestOfferId);
+    event Transfer(address indexed recipient, uint256 amount);
+    event RefundWithdrawal(
+        uint256 indexed auctionId,
+        uint256 indexed offerId,
+        address indexed recipient,
+        uint256 amount
+    );
 
     /**
      * @dev Check if an auction exists, revert otherwise
      * @param auctionId number value for the auction identifier
      */
-    modifier auctionExists(uint auctionId) {
+    modifier auctionExists(uint256 auctionId) {
         require(auctions[auctionId].id == auctionId, "Auction not found");
         _;
     }
@@ -68,7 +72,7 @@ contract Auctions {
      * @dev Check if an auction has not been canceled, revert otherwise
      * @param auctionId number value for the auction identifier
      */
-    modifier auctionIsNotCancelled(uint auctionId) {
+    modifier auctionIsNotCanceled(uint256 auctionId) {
         require(
             auctions[auctionId].isCanceled == false,
             "Auction is already canceled"
@@ -86,8 +90,8 @@ contract Auctions {
     function createAuction(
         string calldata name,
         string calldata description,
-        uint minimumOfferPrice,
-        uint duration
+        uint256 minimumOfferPrice,
+        uint256 duration
     ) external {
         require(
             duration >= 1 days && duration <= 30 days,
@@ -95,7 +99,7 @@ contract Auctions {
         );
 
         // arrays need to be initialized when empty
-        uint[] memory offerIds = new uint[](0);
+        uint256[] memory offerIds = new uint256[](0);
 
         auctions[nextAuctionId] = Auction({
             id: nextAuctionId,
@@ -120,9 +124,9 @@ contract Auctions {
      * @dev Cancel an existing auction and refund any offers already made
      * @param auctionId number value for the auction identifier
      */
-    function cancelAuction(uint auctionId)
+    function cancelAuction(uint256 auctionId)
         external
-        auctionIsNotCancelled(auctionId)
+        auctionIsNotCanceled(auctionId)
     {
         require(
             auctions[auctionId].seller == msg.sender,
@@ -137,23 +141,8 @@ contract Auctions {
             "Auction has already ended"
         );
 
-        // Loop through all the offers
-        for (uint i = 0; i < auction.offerIds.length; i++) {
-            uint currentOfferId = auction.offerIds[i];
-
-            // Refund bid for each offer
-            (bool sentOfferPrice, bytes memory dataOfferPrice) = payable(
-                offers[currentOfferId].buyer
-            ).call{value: offers[currentOfferId].offerPrice}("");
-
-            require(sentOfferPrice, "Failed to send Ether");
-            emit Transfer(
-                offers[currentOfferId].buyer,
-                offers[currentOfferId].offerPrice
-            );
-        }
-
         auction.isCanceled = true;
+
         emit CancelAuction(auctionId, msg.sender);
     }
 
@@ -161,11 +150,11 @@ contract Auctions {
      * @dev Create a new offer for an existing auction (send bid value via msg.value)
      * @param auctionId number value for the auction identifier
      */
-    function createOffer(uint auctionId)
+    function createOffer(uint256 auctionId)
         external
         payable
         auctionExists(auctionId)
-        auctionIsNotCancelled(auctionId)
+        auctionIsNotCanceled(auctionId)
     {
         Auction storage auction = auctions[auctionId];
 
@@ -180,12 +169,20 @@ contract Auctions {
         Offer memory bestOffer = offers[auction.bestOfferId];
 
         // Take into account previous bids from this buyer so they can add up
-        // to the new (higher) bid
+        // to the new (higher) bid and make previous bid stale to prevent
+        // multiple withdrawals later
         Offer[] memory auctionOffers = getAllAuctionOffers(auctionId);
-        uint offerPrice = msg.value;
-
-        for (uint i = 0; i < auctionOffers.length; i++) {
+        uint256 offerPrice = msg.value;
+        uint256 auctionOffersLength = auctionOffers.length;
+        for (uint256 i = 0; i < auctionOffersLength; i++) {
+            // check if offer is from this buyer
             if (auctionOffers[i].buyer == msg.sender) {
+                Offer storage offer = offers[auctionOffers[i].id];
+                // check if offer is not stale already, otherwise make it stale
+                if (offer.isStale == false) {
+                    offer.isStale = true;
+                }
+                // add uup the past offer price to compose the new higher bid
                 offerPrice += auctionOffers[i].offerPrice;
             }
         }
@@ -199,7 +196,8 @@ contract Auctions {
             id: nextOfferId,
             auctionId: auctionId,
             offerPrice: offerPrice,
-            buyer: msg.sender
+            buyer: msg.sender,
+            isStale: false
         });
 
         // Update auction with the new best offer
@@ -209,20 +207,26 @@ contract Auctions {
 
         buyerOffers[msg.sender].push(nextOfferId);
 
-        emit CreateOffer(nextOfferId, auctionId, msg.value, offerPrice, msg.sender);
+        emit CreateOffer(
+            nextOfferId,
+            auctionId,
+            msg.value,
+            offerPrice,
+            msg.sender
+        );
 
         nextOfferId++;
     }
 
     /**
-     * @dev Execute the trade after the auction has ended, transfer the best bid
-     *      to the seller and refund the other bidders
+     * @dev Execute the trade after the auction has ended and transfer the best bid
+     *      to the seller
      * @param auctionId number value for the auction identifier
      */
-    function trade(uint auctionId)
+    function trade(uint256 auctionId)
         external
         auctionExists(auctionId)
-        auctionIsNotCancelled(auctionId)
+        auctionIsNotCanceled(auctionId)
     {
         Auction storage auction = auctions[auctionId];
 
@@ -233,24 +237,10 @@ contract Auctions {
         );
 
         // Retrieve the best offer
-        Offer memory bestOffer = offers[auction.bestOfferId];
+        Offer storage bestOffer = offers[auction.bestOfferId];
 
-        // Loop through all the offers
-        for (uint i = 0; i < auction.offerIds.length; i++) {
-            uint currentOfferId = auction.offerIds[i];
-
-            Offer memory currentOffer = offers[currentOfferId];
-
-            // Refund bid for each offer except the winning offer
-            if (currentOfferId != bestOffer.id) {
-                (bool sentOfferPrice, bytes memory dataOfferPrice) = payable(
-                    currentOffer.buyer
-                ).call{value: currentOffer.offerPrice}("");
-
-                require(sentOfferPrice, "Failed to send Ether");
-                emit Transfer(currentOffer.buyer, currentOffer.offerPrice);
-            }
-        }
+        // Mark it as stale to prevent later withdrawals
+        bestOffer.isStale = true;
 
         // Send winning offer to the seller
         (bool sent, bytes memory data) = payable(auction.seller).call{
@@ -264,15 +254,54 @@ contract Auctions {
     }
 
     /**
+     * @dev Allow auction participants to withdraw their funds (pull-pattern)
+     * @param auctionId number value for the auction identifier
+     */
+    function refundWithdrawal(uint256 auctionId)
+        external
+        auctionExists(auctionId)
+    {
+        Auction memory auction = auctions[auctionId];
+
+        require(
+            auction.isCanceled == true || block.timestamp > auction.auctionEnd,
+            "Unable to withdraw from active auction"
+        );
+
+        // Retrieve all the offer ids for this auction
+        uint256[] memory auctionOfferIds = auction.offerIds;
+
+        // Search for the latest offer from this buyer (highest non-stale offer)
+        uint256 auctionOfferIdsLength = auctionOfferIds.length;
+        for (uint256 i = 0; i < auctionOfferIdsLength; i++) {
+            Offer storage offer = offers[auctionOfferIds[i]];
+
+            if (offer.isStale == false) {
+                // Refund offer to the buyer
+                (bool sent, bytes memory data) = payable(offer.buyer).call{
+                    value: offer.offerPrice
+                }("");
+
+                require(sent, "Failed to send Ether");
+
+                // Mark it as stale to prevent later withdrawals
+                offer.isStale = true;
+
+                emit Transfer(offer.buyer, offer.offerPrice);
+            }
+        }
+    }
+
+    /**
      * @dev Retrieve all auctions
      */
     function getAllAuctions() external view returns (Auction[] memory) {
-        uint auctionArrayLength = nextAuctionId - 1;
+        uint256 auctionArrayLength = nextAuctionId - 1;
 
         // create an in-memory fixed-sized array to hold the auctions
         Auction[] memory _auctions = new Auction[](auctionArrayLength);
 
-        for (uint i = 0; i < auctionArrayLength; i++) {
+        for (uint256 i = 0; i < auctionArrayLength; i++) {
             _auctions[i] = auctions[i + 1];
         }
 
@@ -283,7 +312,7 @@ contract Auctions {
      * @dev Retrieve all offers for an auction
      * @param auctionId number value for the auction identifier
      */
-    function getAllAuctionOffers(uint auctionId)
+    function getAllAuctionOffers(uint256 auctionId)
         public
         view
         auctionExists(auctionId)
@@ -293,12 +322,13 @@ contract Auctions {
         Auction memory auction = auctions[auctionId];
 
         // Retrieve all the offer ids for this auction
-        uint[] memory auctionOfferIds = auction.offerIds;
+        uint256[] memory auctionOfferIds = auction.offerIds;
 
         // create an in-memory fixed-sized array to hold the offers
         Offer[] memory _offers = new Offer[](auctionOfferIds.length);
 
-        for (uint i = 0; i < auctionOfferIds.length; i++) {
+        uint256 auctionOfferIdsLength = auctionOfferIds.length;
+        for (uint256 i = 0; i < auctionOfferIdsLength; i++) {
             _offers[i] = offers[auctionOfferIds[i]];
         }
 
