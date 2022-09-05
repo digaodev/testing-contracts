@@ -64,7 +64,7 @@ async function deployWithAuctionAndTwoOffersFixture() {
   });
   await tx2.wait();
 
-  const OFFER_PRICE_HIGHER_BUYER2 = 2000;
+  const OFFER_PRICE_HIGHER_BUYER2 = 1500;
   const tx3 = await auctions.connect(buyer2).createOffer(AUCTION_ID, {
     value: OFFER_PRICE_HIGHER_BUYER2
   });
@@ -155,13 +155,13 @@ describe("Create Auction", function () {
 
 describe("Cancel Auction", function () {
   it("Should cancel an auction if seller", async function () {
-    const { auctions } = await loadFixture(
+    const { auctions, seller } = await loadFixture(
       deployWithAuctionAndTwoOffersFixture
     );
 
     const AUCTION_ID = 1;
 
-    const tx = await auctions.cancelAuction(AUCTION_ID);
+    const tx = await auctions.connect(seller).cancelAuction(AUCTION_ID);
     await tx.wait();
 
     const allAuctions = await auctions.getAllAuctions();
@@ -169,50 +169,40 @@ describe("Cancel Auction", function () {
     expect(allAuctions[0].isCanceled).to.be.true;
   });
 
-  it("Should refund all the offers when canceling an auction", async function () {
+  it("Should leave active offers for refund when canceling an auction", async function () {
     const {
       auctions,
-      seller,
-      buyer1,
-      buyer2,
-      OFFER_PRICE_BUYER1,
-      OFFER_PRICE_HIGHER_BUYER2
+      buyer1
     } = await loadFixture(deployWithAuctionAndTwoOffersFixture);
 
     const AUCTION_ID = 1;
+    const OFFER_PRICE_HIGHER = 1000;
 
-    await expect(auctions.cancelAuction(AUCTION_ID))
-      .to.changeEtherBalances(
-        [auctions,
-          seller,
-          buyer1,
-          buyer2],
-        [-(OFFER_PRICE_BUYER1 + OFFER_PRICE_HIGHER_BUYER2),
-          0,
-          OFFER_PRICE_BUYER1,
-          OFFER_PRICE_HIGHER_BUYER2]
-      );
+    const tx = await auctions.connect(buyer1).createOffer(
+      AUCTION_ID,
+      {
+        value: OFFER_PRICE_HIGHER
+      });
+    await tx.wait();
+
+    const allOffers = await auctions.getAllAuctionOffers(AUCTION_ID);
+
+    expect(allOffers[0].isStale).to.be.true;
+    expect(allOffers[1].isStale).to.be.false;
+    expect(allOffers[2].isStale).to.be.false;
   });
 
-  it("Should emit multiple events when canceling an auction with multiple offers", async function () {
+  it("Should emit an event when canceling an auction", async function () {
     const {
       auctions,
-      seller,
-      buyer1,
-      buyer2,
-      OFFER_PRICE_BUYER1,
-      OFFER_PRICE_HIGHER_BUYER2
+      seller
     } = await loadFixture(deployWithAuctionAndTwoOffersFixture);
 
     const AUCTION_ID = 1;
 
     await expect(auctions.cancelAuction(AUCTION_ID))
       .to.emit(auctions, "CancelAuction")
-      .withArgs(AUCTION_ID, seller.address)
-      .to.emit(auctions, "Transfer")
-      .withArgs(buyer1.address, OFFER_PRICE_BUYER1)
-      .to.emit(auctions, "Transfer")
-      .withArgs(buyer2.address, OFFER_PRICE_HIGHER_BUYER2);
+      .withArgs(AUCTION_ID, seller.address);
   });
 
   it("Should revert if not seller when canceling an auction", async function () {
@@ -261,6 +251,7 @@ describe("Create Offer", function () {
     expect(allOffers[0].auctionId).to.equal(AUCTION_ID);
     expect(allOffers[0].offerPrice).to.equal(OFFER_PRICE);
     expect(allOffers[0].buyer).to.equal(buyer1.address);
+    expect(allOffers[0].isStale).to.be.false;
     expect(allAuctions[0].bestOfferId).to.equal(OFFER_ID);
     expect(allAuctions[0].offerIds.length).to.equal(1);
     expect(await auctions.buyerOffers(buyer1.address, 0)).to.equal(OFFER_ID);
@@ -310,6 +301,9 @@ describe("Create Offer", function () {
     expect(allOffers[2].offerPrice).to.equal(TOTAL_OFFERS_BUYER1);
     expect(allOffers[2].buyer).to.equal(buyer1.address);
 
+    expect(allOffers[0].isStale).to.be.true;
+    expect(allOffers[1].isStale).to.be.false;
+    expect(allOffers[2].isStale).to.be.false;
     expect(allAuctions[0].bestOfferId).to.equal(OFFER_ID2_BUYER1);
     expect(allAuctions[0].offerIds.length).to.equal(3);
     expect(await auctions.buyerOffers(buyer1.address, 0)).to.equal(OFFER_ID_BUYER1);
@@ -407,37 +401,43 @@ describe("Create Offer", function () {
 });
 
 describe("Execute Trade", function () {
-  it("Should execute a trade after the auction has ended", async function () {
+  it("Should execute a trade and make the funds available after the auction has ended", async function () {
     const {
       auctions,
       seller,
-      buyer1,
       buyer2,
       AUCTION_DURATION,
-      OFFER_PRICE_BUYER1,
       OFFER_PRICE_HIGHER_BUYER2
     } = await loadFixture(deployWithAuctionAndTwoOffersFixture);
 
     const AUCTION_ID = 1;
+    const OFFER_PRICE_HIGHER = 2500;
+    const TOTAL_OFFER_BUYER2 = OFFER_PRICE_HIGHER + OFFER_PRICE_HIGHER_BUYER2;
+
+    const tx = await auctions.connect(buyer2).createOffer(
+      AUCTION_ID,
+      {
+        value: OFFER_PRICE_HIGHER
+      });
+    await tx.wait();
 
     const auctionEnd = await time.latest() + AUCTION_DURATION;
     await time.increaseTo(auctionEnd);
 
+    const allOffers = await auctions.getAllAuctionOffers(AUCTION_ID);
+
+    expect(allOffers[0].isStale).to.be.false;
+    expect(allOffers[1].isStale).to.be.true;
+    expect(allOffers[2].isStale).to.be.false;
     await expect(auctions.trade(AUCTION_ID))
       .to.changeEtherBalances(
-        [auctions,
-          seller,
-          buyer1,
-          buyer2],
-        [-(OFFER_PRICE_BUYER1 + OFFER_PRICE_HIGHER_BUYER2),
-          OFFER_PRICE_HIGHER_BUYER2,
-          OFFER_PRICE_BUYER1,
-          0]
+        [auctions, seller],
+        [-TOTAL_OFFER_BUYER2, TOTAL_OFFER_BUYER2]
       );
   });
 
-  it("Should emit multiple events when executing a trade", async function () {
-    const { auctions, seller, buyer1, AUCTION_DURATION } = await loadFixture(
+  it("Should emit an event when executing a trade", async function () {
+    const { auctions, AUCTION_DURATION } = await loadFixture(
       deployWithAuctionAndTwoOffersFixture
     );
 
@@ -449,11 +449,7 @@ describe("Execute Trade", function () {
 
     await expect(auctions.trade(AUCTION_ID))
       .to.emit(auctions, "Trade")
-      .withArgs(AUCTION_ID, BEST_OFFER_ID)
-      .to.emit(auctions, "Transfer")
-      .withArgs(seller.address, 2000)
-      .to.emit(auctions, "Transfer")
-      .withArgs(buyer1.address, 1000);
+      .withArgs(AUCTION_ID, BEST_OFFER_ID);
   });
 
   it("Should revert if the trade is executed for an inexistent auction", async function () {
@@ -495,3 +491,139 @@ describe("Execute Trade", function () {
       .to.be.revertedWith('Auction is already canceled');
   });
 });
+
+describe("Refund Withdrawal", function () {
+  it("Should allow buyer to get refunded after the auction has ended", async function () {
+    const {
+      auctions,
+      buyer1,
+      buyer2,
+      AUCTION_DURATION,
+      OFFER_PRICE_BUYER1
+    } = await loadFixture(deployWithAuctionAndTwoOffersFixture);
+
+    const AUCTION_ID = 1;
+    const OFFER_PRICE_HIGHER = 2500;
+
+    const tx = await auctions.connect(buyer2).createOffer(
+      AUCTION_ID,
+      {
+        value: OFFER_PRICE_HIGHER
+      });
+    await tx.wait();
+
+    const currentTime = await time.latest();
+    const auctionEnd =  currentTime + AUCTION_DURATION;
+    await time.increaseTo(auctionEnd);
+
+    const tx2 = await auctions.trade(AUCTION_ID);
+    await tx2.wait();
+
+    const offersBeforeRefund = await auctions.getAllAuctionOffers(AUCTION_ID);
+
+    expect(offersBeforeRefund[0].isStale).to.be.false; // was outbid, needs to be refunded
+    expect(offersBeforeRefund[1].isStale).to.be.true; // was outbid, won't be refuded (sum up)
+    expect(offersBeforeRefund[2].isStale).to.be.true; // winning bid, was sent to seller on .trade()
+    await expect(auctions.connect(buyer1).refundWithdrawal(AUCTION_ID))
+      .to.changeEtherBalances(
+        [auctions, buyer1],
+        [-OFFER_PRICE_BUYER1, OFFER_PRICE_BUYER1]
+      );
+
+    const offersAfterRefund = await auctions.getAllAuctionOffers(AUCTION_ID);
+
+    expect(offersAfterRefund[0].isStale).to.be.true; // was refunded on withdraw
+  });
+
+  it("Should allow buyer to get refunded after the auction was canceled", async function () {
+    const {
+      auctions,
+      seller,
+      buyer1,
+      buyer2,
+      OFFER_PRICE_BUYER1
+    } = await loadFixture(deployWithAuctionAndTwoOffersFixture);
+
+    const AUCTION_ID = 1;
+    const OFFER_PRICE_HIGHER = 2500;
+
+    const tx = await auctions.connect(buyer2).createOffer(
+      AUCTION_ID,
+      {
+        value: OFFER_PRICE_HIGHER
+      });
+    await tx.wait();
+
+    const tx2 = await auctions.connect(seller).cancelAuction(AUCTION_ID);
+    await tx2.wait();
+
+    const offersBeforeRefund = await auctions.getAllAuctionOffers(AUCTION_ID);
+
+    expect(offersBeforeRefund[0].isStale).to.be.false; // was outbid, needs to be refunded
+    expect(offersBeforeRefund[1].isStale).to.be.true; // was outbid, won't be refuded (sum up)
+    expect(offersBeforeRefund[2].isStale).to.be.false; // winning bid until auction canceled
+    await expect(auctions.connect(buyer1).refundWithdrawal(AUCTION_ID))
+      .to.changeEtherBalances(
+        [buyer1],
+        [OFFER_PRICE_BUYER1]
+      );
+
+    const offersAfterRefund = await auctions.getAllAuctionOffers(AUCTION_ID);
+
+    expect(offersAfterRefund[0].isStale).to.be.true; // was refunded on withdraw
+  });
+
+  it("Should emit an event when executing a refund", async function () {
+    const {
+      auctions,
+      buyer1,
+      buyer2,
+      OFFER_PRICE_BUYER1,
+      AUCTION_DURATION
+    } = await loadFixture(
+      deployWithAuctionAndTwoOffersFixture
+    );
+
+    const AUCTION_ID = 1;
+    const OFFER_PRICE_HIGHER = 2500;
+
+    const tx = await auctions.connect(buyer2).createOffer(
+      AUCTION_ID,
+      {
+        value: OFFER_PRICE_HIGHER
+      });
+    await tx.wait();
+
+    const auctionEnd = await time.latest() + AUCTION_DURATION;
+    await time.increaseTo(auctionEnd);
+
+    const tx2 = await auctions.trade(AUCTION_ID);
+    await tx2.wait();
+
+    await expect(auctions.connect(buyer1).refundWithdrawal(AUCTION_ID))
+      .to.emit(auctions, "Transfer")
+      .withArgs(buyer1.address, OFFER_PRICE_BUYER1);
+  });
+
+  it("Should revert when trying to get a refund for an inexistent auction", async function () {
+    const { auctions, buyer1 } = await loadFixture(
+      deployWithAuctionAndTwoOffersFixture
+    );
+
+    const INEXISTENT_AUCTION_ID = 10;
+
+    await expect(auctions.connect(buyer1).refundWithdrawal(INEXISTENT_AUCTION_ID))
+      .to.be.revertedWith('Auction not found');
+  });
+
+  it("Should revert when trying to get a refund for an active auction", async function () {
+    const { auctions, buyer1 } = await loadFixture(
+      deployWithAuctionAndTwoOffersFixture
+    );
+
+    const AUCTION_ID = 1;
+
+    await expect(auctions.connect(buyer1).refundWithdrawal(AUCTION_ID))
+      .to.be.revertedWith('Unable to withdraw from active auction');
+  });
+})
