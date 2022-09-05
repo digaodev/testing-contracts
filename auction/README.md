@@ -24,7 +24,7 @@ npx hardhat compile
 npx hardhat test
 ```
 
-<img width="915" alt="image" src="https://user-images.githubusercontent.com/14263913/186523786-97a1911e-297d-4eb8-81df-1139ccbe6eec.png">
+<img width="945" alt="image" src="https://user-images.githubusercontent.com/14263913/188509877-0310bf80-12b8-407a-9bcb-ab2d2c0f548a.png">
 
 #
 
