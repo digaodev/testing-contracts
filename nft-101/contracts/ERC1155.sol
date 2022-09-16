@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-contract ERC721 {
+contract ERC1155 {
     // tokenID => owner address => balance
     mapping(uint256 => mapping(address => uint256)) internal _balances;
 
