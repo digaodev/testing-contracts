@@ -40,11 +40,11 @@
     },
     {
       "trait_type": "Humble",
-      "value": true
+      "value": "True"
     },
     {
       "trait_type": "Kind",
-      "value": true
+      "value": "True"
     }
   ]
 }
