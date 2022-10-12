@@ -65,7 +65,7 @@ describe("SplitPayment", function () {
     });
 
     describe("Events", function () {
-      it("Should emit an event on withdrawals", async function () {
+      it("Should emit an event on transfers", async function () {
         const {
           splitPayment,
           owner,
