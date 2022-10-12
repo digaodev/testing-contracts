@@ -45,7 +45,7 @@ describe("SplitPayment", function () {
           .to.be.revertedWith("Only owner is allowed");
       });
 
-      it("Should revert with to and amount have different lengths", async function () {
+      it("Should revert with if to and amount have different lengths", async function () {
         const {
           splitPayment,
           recipient1,
